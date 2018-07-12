@@ -5,12 +5,25 @@ import './App.css';
 import gql from "graphql-tag";
 import { Mutation, Query } from "react-apollo";
 
+const addNewEntryToClient = (client, addTodo) => {
+  const { todos } = client.readQuery({ query: GET_TODOS });
+  const toWrite = {
+      query: GET_TODOS,
+      data: {
+        todos: todos.concat([
+          addTodo
+      ])
+    }
+  }
+  client.writeQuery(toWrite);
+}
+
 const GET_TODOS = gql`
   {
     todos {
       id
       type
-      status
+      status @client
     }
   }
 `;
@@ -20,7 +33,7 @@ const ADD_TODO = gql`
     addTodo(type: $type) {
       id
       type
-      status
+      status @client
     }
   }
 `;
@@ -30,7 +43,7 @@ const UPDATE_TODO = gql`
     updateTodo(id: $id, type: $type) {
       id
       type
-      status
+      status @client
     }
   }
 `;
@@ -46,7 +59,7 @@ const Todos = () => (
 
         return (
           <Mutation mutation={UPDATE_TODO} key={id}>
-            {updateTodo => (
+            {(updateTodo, { loading, error }) => (
               <div>
                 <p>{status === 'PENDING' ? '(pending)' : status === 'FAILED' ? '(failed)' : '(confirmed)'} {type}</p>
                 <form
@@ -57,7 +70,8 @@ const Todos = () => (
                         updateTodo: {
                           __typename: 'Todo',
                           id,
-                          type: input.value
+                          type: input.value,
+                          status: 'PENDING'
                         }
                       },
                       variables: { id, type: input.value }
@@ -72,6 +86,8 @@ const Todos = () => (
                     }}
                   />
                   <button type="submit">Update Todo</button>
+                  {loading && <span>Sending to server...</span>}
+                  {error && <span>Error :( Please try again</span>}
                 </form>
               </div>
             )}
@@ -82,19 +98,6 @@ const Todos = () => (
   </Query>
 );
 
-const updateClient = (client, addTodo) => {
-  const { todos } = client.readQuery({ query: GET_TODOS });
-  const toWrite = {
-      query: GET_TODOS,
-      data: {
-        todos: todos.concat([
-          addTodo
-      ])
-    }
-  }
-  client.writeQuery(toWrite);
-}
-
 const AddTodo = () => {
   let input;
   let previousInput;
@@ -103,18 +106,10 @@ const AddTodo = () => {
     <Mutation
       mutation={ADD_TODO}
       update={(cache, { data: { addTodo } }) => {
-        updateClient(cache, addTodo);
+        addNewEntryToClient(cache, addTodo);
       }}
     >
       {(addTodo, { data, loading, error, client }) => {
-        const optimisticResponse = ipt  => ({
-          addTodo: {
-            __typename: 'Todo',
-            id: `${Math.round(Math.random() * -1000000)}`,
-            type: ipt ? ipt.value : null,
-            status: 'PENDING'
-          }
-        });
         return (
           <div>
             <form
@@ -122,12 +117,21 @@ const AddTodo = () => {
                 e.preventDefault();
                 try {
                   await addTodo({
-                    optimisticResponse: optimisticResponse(input),
+                    optimisticResponse: {
+                      addTodo: {
+                        __typename: 'Todo',
+                        id: `${Math.round(Math.random() * -1000000)}`,
+                        type: input.value,
+                        status: 'PENDING'
+                      }
+                    },
                     variables: { type: input.value }
                   });
                 } catch (e) {
-                  updateClient(client, {
-                    ...optimisticResponse(previousInput).addTodo,
+                  addNewEntryToClient(client, {
+                    __typename: 'Todo',
+                    id: `${Math.round(Math.random() * -1000000)}`,
+                    type: previousInput.value,
                     status: 'FAILED'
                   });
                 } finally {
