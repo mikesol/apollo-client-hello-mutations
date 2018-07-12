@@ -93,7 +93,7 @@ const AddTodo = () => {
         });
       }}
     >
-      {(addTodo, { data }) => (
+      {(addTodo, { data, loading, error }) => (
         <div>
           <form
             onSubmit={e => {
@@ -118,6 +118,8 @@ const AddTodo = () => {
             />
             <button type="submit">Add Todo</button>
           </form>
+          {loading && <p>Sending to server...</p>}
+          {error && <p>Error :( Please try again</p>}
         </div>
       )}
     </Mutation>
