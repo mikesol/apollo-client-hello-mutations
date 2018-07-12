@@ -86,11 +86,11 @@ const AddTodo = () => {
     <Mutation
       mutation={ADD_TODO}
       update={(cache, { data: { addTodo } }) => {
-        const { todos } = cache.readQuery({ query: GET_TODOS });
-        cache.writeQuery({
-          query: GET_TODOS,
-          data: { todos: todos.concat([addTodo]) }
-        });
+          const { todos } = cache.readQuery({ query: GET_TODOS });
+          cache.writeQuery({
+            query: GET_TODOS,
+            data: { todos: todos.concat([addTodo]) }
+          });
       }}
     >
       {(addTodo, { data, loading, error }) => (
