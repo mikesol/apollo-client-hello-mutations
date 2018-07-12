@@ -10,6 +10,7 @@ const GET_TODOS = gql`
     todos {
       id
       type
+      status
     }
   }
 `;
@@ -19,6 +20,7 @@ const ADD_TODO = gql`
     addTodo(type: $type) {
       id
       type
+      status
     }
   }
 `;
@@ -28,6 +30,7 @@ const UPDATE_TODO = gql`
     updateTodo(id: $id, type: $type) {
       id
       type
+      status
     }
   }
 `;
@@ -38,14 +41,16 @@ const Todos = () => (
       if (loading) return <p>Loading...</p>;
       if (error) return <p>Error :(</p>;
 
-      return data.todos.map(({ id, type }) => {
+      return data.todos.map(({ id, type, status }) => {
         let input;
+
+        console.log("STATUS", status);
 
         return (
           <Mutation mutation={UPDATE_TODO} key={id}>
             {updateTodo => (
               <div>
-                <p>{id < 0 ? `(optimistic) ${type}` : type}</p>
+                <p>{status === 'PENDING' ? '(pending)' : status === 'FAILED' ? '(failed)' : '(confirmed)'} {type}</p>
                 <form
                   onSubmit={e => {
                     e.preventDefault();
@@ -79,49 +84,75 @@ const Todos = () => (
   </Query>
 );
 
+const updateClient = (client, addTodo) => {
+  console.log("ADDING", addTodo);
+  const { todos } = client.readQuery({ query: GET_TODOS });
+  const toWrite = {
+      query: GET_TODOS,
+      data: {
+        todos: todos.concat([
+          addTodo
+      ])
+    }
+  }
+  console.log("toWrite", toWrite);
+  client.writeQuery(toWrite);
+}
+
 const AddTodo = () => {
   let input;
+  let previousInput;
 
   return (
     <Mutation
       mutation={ADD_TODO}
       update={(cache, { data: { addTodo } }) => {
-          const { todos } = cache.readQuery({ query: GET_TODOS });
-          cache.writeQuery({
-            query: GET_TODOS,
-            data: { todos: todos.concat([addTodo]) }
-          });
+        updateClient(cache, addTodo);
       }}
     >
-      {(addTodo, { data, loading, error }) => (
-        <div>
-          <form
-            onSubmit={e => {
-              e.preventDefault();
-              addTodo({
-                optimisticResponse: {
-                  addTodo: {
-                    __typename: 'Todo',
-                    id: Math.round(Math.random() * -1000000),
-                    type: input.value
-                  }
-                },
-                variables: { type: input.value }
-              });
-              input.value = "";
-            }}
-          >
-            <input
-              ref={node => {
-                input = node;
+      {(addTodo, { data, loading, error, client }) => {
+        const optimisticResponse = ipt  => ({
+          addTodo: {
+            __typename: 'Todo',
+            id: `${Math.round(Math.random() * -1000000)}`,
+            type: ipt ? ipt.value : null,
+            status: 'PENDING'
+          }
+        });
+        return (
+          <div>
+            <form
+              onSubmit={async e => {
+                e.preventDefault();
+                try {
+                  await addTodo({
+                    optimisticResponse: optimisticResponse(input),
+                    variables: { type: input.value }
+                  });
+                } catch (e) {
+                  console.log("ERRRRR", e);
+                  updateClient(client, {
+                    ...optimisticResponse(previousInput).addTodo,
+                    status: 'FAILED'
+                  });
+                } finally {
+                  input.value = "";
+                }
               }}
-            />
-            <button type="submit">Add Todo</button>
-          </form>
-          {loading && <p>Sending to server...</p>}
-          {error && <p>Error :( Please try again</p>}
-        </div>
-      )}
+            >
+              <input
+                ref={node => {
+                  input = node;
+                  previousInput = node;
+                }}
+              />
+              <button type="submit">Add Todo</button>
+            </form>
+            {loading && <p>Sending to server...</p>}
+            {error && <p>Error :( Please try again</p>}
+          </div>
+        );
+      }}
     </Mutation>
   );
 };
