@@ -44,8 +44,6 @@ const Todos = () => (
       return data.todos.map(({ id, type, status }) => {
         let input;
 
-        console.log("STATUS", status);
-
         return (
           <Mutation mutation={UPDATE_TODO} key={id}>
             {updateTodo => (
@@ -85,7 +83,6 @@ const Todos = () => (
 );
 
 const updateClient = (client, addTodo) => {
-  console.log("ADDING", addTodo);
   const { todos } = client.readQuery({ query: GET_TODOS });
   const toWrite = {
       query: GET_TODOS,
@@ -95,7 +92,6 @@ const updateClient = (client, addTodo) => {
       ])
     }
   }
-  console.log("toWrite", toWrite);
   client.writeQuery(toWrite);
 }
 
@@ -130,7 +126,6 @@ const AddTodo = () => {
                     variables: { type: input.value }
                   });
                 } catch (e) {
-                  console.log("ERRRRR", e);
                   updateClient(client, {
                     ...optimisticResponse(previousInput).addTodo,
                     status: 'FAILED'
